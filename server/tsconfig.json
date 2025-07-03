@@ -1,0 +1,17 @@
+// code-collaborator-ts-mongo/server/tsconfig.json
+{
+  "compilerOptions": {
+    "target": "es2020", // Target ECMAScript version
+    "module": "commonjs", // Module system to use
+    "moduleResolution": "node",
+    "outDir": "./dist", // Output directory for compiled JS
+    "rootDir": "./src", // Root directory for TypeScript files
+    "strict": true, // Enable all strict type-checking options
+    "esModuleInterop": true, // Enables `import x from 'y'` for CommonJS modules
+    "skipLibCheck": true, // Skip type checking of declaration files
+    "forceConsistentCasingInFileNames": true, // Ensure consistent casing
+    "resolveJsonModule": true // Allow importing .json files
+  },
+  "include": ["src/**/*.ts"], // Include all .ts files in src
+  "exclude": ["node_modules"] // Exclude node_modules
+}
