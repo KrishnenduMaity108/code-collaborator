@@ -6,6 +6,7 @@ import dotenv from 'dotenv'
 import mongoose from 'mongoose'
 import './firebaseAdmin';
 import { authMiddleware } from './middleware/authMiddleware';
+import authRoutes from './routes/authRoutes';
 import * as admin from 'firebase-admin';
 
 dotenv.config();   // Load environment variables
@@ -36,6 +37,8 @@ mongoose.connect(MONGODB_URI)
     console.error("Mongodb connection error", err);
     process.exit(1);
   });
+
+app.use('/api/auth', authRoutes);
 
 app.get('/', (req,res) => {
   console.log("hello");
