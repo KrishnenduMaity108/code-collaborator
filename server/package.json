@@ -18,6 +18,7 @@
     "express": "^5.1.0",
     "firebase-admin": "^13.4.0",
     "mongoose": "^8.16.1",
+    "shortid": "^2.2.17",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
@@ -26,6 +27,7 @@
     "@types/express": "^5.0.3",
     "@types/mongoose": "^5.11.97",
     "@types/node": "^24.0.10",
+    "@types/shortid": "^2.2.0",
     "@types/socket.io": "^3.0.2",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
