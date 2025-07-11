@@ -1,6 +1,8 @@
+// client/src/components/RoomLobby.tsx
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { auth } from '../firebase'; // For getting the ID token
+import { auth } from '../firebase';
+import { type IRoom } from '../types'; // Import IRoom type
 
 interface RoomLobbyProps {
   onJoinRoom: (roomId: string) => void;
@@ -12,7 +14,7 @@ const API_BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 const RoomLobby: React.FC<RoomLobbyProps> = ({ onJoinRoom, userId }) => {
   const [newRoomName, setNewRoomName] = useState('');
   const [joinRoomId, setJoinRoomId] = useState('');
-  const [myRooms, setMyRooms] = useState<any[]>([]);
+  const [myRooms, setMyRooms] = useState<IRoom[]>([]); // Use IRoom type
   const [isLoading, setIsLoading] = useState(false);
 
   // Fetch rooms created by the user
@@ -47,8 +49,10 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({ onJoinRoom, userId }) => {
       }
     };
 
-    fetchMyRooms();
-  }, [userId]); // Re-fetch when userId changes (user logs in/out)
+    if (userId) { // Only fetch if userId is available
+      fetchMyRooms();
+    }
+  }, [userId]);
 
   const handleCreateRoom = async () => {
     if (!newRoomName.trim()) {
@@ -91,7 +95,7 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({ onJoinRoom, userId }) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)] bg-gray-900 text-white p-4">
       <h1 className="text-3xl font-bold mb-8 text-cyan-400">Collaborative Rooms</h1>
 
       {/* Create Room Section */}
