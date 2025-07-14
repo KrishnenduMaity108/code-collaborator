@@ -59,8 +59,7 @@ function App() {
     );
   }
 
-  // Get current user's display name for passing to CodeEditor
-  const currentUserName = user?.displayName || user?.email || 'Anonymous'; // <--- Get current user's name
+  const currentUserName = user?.displayName || user?.email || 'Anonymous';
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col">
@@ -78,7 +77,7 @@ function App() {
               initialLanguage={roomData.language}
               activeParticipants={activeParticipants}
               onLeaveRoom={() => leaveRoom(socket)}
-              currentUserName={currentUserName} // <--- Pass it down
+              currentUserName={currentUserName}
             />
           </>
         ) : (

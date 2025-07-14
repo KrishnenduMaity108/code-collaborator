@@ -1,17 +1,16 @@
 // code-collaborator-ts-mongo/client/src/hooks/useRoomManagement.ts
 import { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { type IFirebaseUser, type IRoom } from '../types';
+import { type IRoom } from '../types';
 import { Socket } from 'socket.io-client';
 import { auth } from '../firebase';
-import { type User as FirebaseSDKUser } from 'firebase/auth'; // Import the Firebase User type
+import { type User as FirebaseSDKUser } from 'firebase/auth';
 
 const API_BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 interface UseRoomManagementResult {
     currentRoomId: string | null;
     roomData: IRoom | null;
-    // Change the type of 'user' parameter here from IFirebaseUser to FirebaseSDKUser
     handleJoinRoom: (roomId: string, user: FirebaseSDKUser, socket: Socket) => Promise<void>;
     handleLeaveRoom: (socket: Socket) => void;
     setCurrentRoomId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -24,7 +23,6 @@ export const useRoomManagement = (): UseRoomManagementResult => {
 
     const fetchRoomDetails = useCallback(async (roomId: string) => {
         try {
-            // auth.currentUser will return the FirebaseSDKUser type, which has getIdToken()
             const idToken = await auth.currentUser?.getIdToken();
             if (!idToken) {
                 toast.error('Authentication token not found.');
@@ -40,7 +38,7 @@ export const useRoomManagement = (): UseRoomManagementResult => {
                 throw new Error(errorData.message || 'Failed to fetch room details.');
             }
             const data = await response.json();
-            return data.room as IRoom;
+            return data.room as IRoom; // Assuming server returns { room: IRoom }
         } catch (error: any) {
             console.error('Error fetching room details:', error);
             toast.error(error.message);
@@ -48,7 +46,6 @@ export const useRoomManagement = (): UseRoomManagementResult => {
         }
     }, []);
 
-    // Change the type of 'user' parameter here from IFirebaseUser to FirebaseSDKUser
     const handleJoinRoom = useCallback(async (roomId: string, user: FirebaseSDKUser, socket: Socket) => {
         if (!socket || !user) {
             toast.error('Not connected or not logged in.');
@@ -56,9 +53,6 @@ export const useRoomManagement = (): UseRoomManagementResult => {
         }
 
         try {
-            // The 'user' parameter here is now correctly typed as FirebaseSDKUser
-            const idToken = await user.getIdToken();
-
             const fetchedRoomData = await fetchRoomDetails(roomId);
 
             if (fetchedRoomData) {
@@ -66,7 +60,7 @@ export const useRoomManagement = (): UseRoomManagementResult => {
                 setCurrentRoomId(roomId);
 
                 socket.connect();
-                socket.emit('joinRoom', { roomId, idToken });
+                socket.emit('joinRoom', { roomId, idToken: await user.getIdToken() }); // Ensure idToken is passed
                 toast.success(`Joining room: ${fetchedRoomData.roomName}`);
             } else {
                 setCurrentRoomId(null);
@@ -82,7 +76,7 @@ export const useRoomManagement = (): UseRoomManagementResult => {
 
     const handleLeaveRoom = useCallback((socket: Socket) => {
         if (socket && currentRoomId) {
-            socket.disconnect();
+            socket.disconnect(); // Disconnects from all Socket.IO rooms
             setCurrentRoomId(null);
             setRoomData(null);
             toast('You left the room.');

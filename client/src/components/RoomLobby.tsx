@@ -1,7 +1,7 @@
 // client/src/components/RoomLobby.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react'; // Added useCallback
 import toast from 'react-hot-toast';
-import { auth } from '../firebase';
+import { auth } from '../firebase'; // Assuming 'auth' is correctly imported from your Firebase setup
 import { type IRoom } from '../types'; // Import IRoom type
 
 interface RoomLobbyProps {
@@ -17,42 +17,45 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({ onJoinRoom, userId }) => {
   const [myRooms, setMyRooms] = useState<IRoom[]>([]); // Use IRoom type
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch rooms created by the user
-  useEffect(() => {
-    const fetchMyRooms = async () => {
-      setIsLoading(true);
-      try {
-        const idToken = await auth.currentUser?.getIdToken();
-        if (!idToken) {
-          toast.error('Authentication token not found.');
-          setIsLoading(false);
-          return;
-        }
-
-        const response = await fetch(`${API_BASE_URL}/api/rooms/my-rooms`, {
-          headers: {
-            'Authorization': `Bearer ${idToken}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        setMyRooms(data.rooms);
-      } catch (error) {
-        console.error('Error fetching my rooms:', error);
-        toast.error('Failed to load your rooms.');
-      } finally {
+  // Function to fetch rooms created by the user (now extracted and memoized)
+  const fetchMyRooms = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        toast.error('Authentication token not found. Please log in again.');
         setIsLoading(false);
+        return;
       }
-    };
 
+      const response = await fetch(`${API_BASE_URL}/api/rooms/my-rooms`, {
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text(); // Read as text to diagnose
+        console.error('Fetch my rooms response not OK:', response.status, errorText);
+        throw new Error(`Failed to fetch your rooms: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      setMyRooms(data.rooms); // Assuming server returns { rooms: [] }
+    } catch (error) {
+      console.error('Error fetching my rooms:', error);
+      toast.error('Failed to load your rooms.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []); // No dependencies, as auth.currentUser is always current
+
+  // Fetch rooms on component mount and when userId changes
+  useEffect(() => {
     if (userId) { // Only fetch if userId is available
       fetchMyRooms();
     }
-  }, [userId]);
+  }, [userId, fetchMyRooms]); // Added fetchMyRooms to dependencies
 
   const handleCreateRoom = async () => {
     if (!newRoomName.trim()) {
@@ -78,13 +81,23 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({ onJoinRoom, userId }) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create room.');
+        // Read response as text first to avoid "Unexpected end of JSON input"
+        const errorBody = await response.text();
+        let errorMessage = `Failed to create room: ${response.status} - ${response.statusText}`;
+        try {
+          const errorData = JSON.parse(errorBody);
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          console.error("Failed to parse error response as JSON:", e, "Raw text:", errorBody);
+          errorMessage = `Failed to create room: ${response.status} - ${response.statusText}. Server response: ${errorBody.substring(0, 100)}...`;
+        }
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      const data = await response.json(); // This should now reliably be JSON
       toast.success(`Room "${data.room.roomName}" created with ID: ${data.room.roomId}`);
       setNewRoomName('');
+      await fetchMyRooms(); // Refresh the list of my rooms after creation
       onJoinRoom(data.room.roomId); // Automatically join the new room
     } catch (error: any) {
       console.error('Error creating room:', error);
@@ -93,6 +106,53 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({ onJoinRoom, userId }) => {
       setIsLoading(false);
     }
   };
+
+  // --- NEW: handle delete room function ---
+  const handleDeleteRoom = async (roomId: string, roomName: string) => {
+    // Use a custom modal in production, window.confirm for quick implementation
+    if (!window.confirm(`Are you sure you want to delete the room "${roomName}"? This action cannot be undone.`)) {
+      return; // User cancelled
+    }
+
+    setIsLoading(true);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        toast.error('Authentication token not found.');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/rooms/${roomId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        let errorMessage = `Failed to delete room: ${response.status} - ${response.statusText}`;
+        try {
+          const errorData = JSON.parse(errorBody);
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          console.error("Failed to parse error response as JSON:", e, "Raw text:", errorBody);
+          errorMessage = `Failed to delete room: ${response.status} - ${response.statusText}. Server response: ${errorBody.substring(0, 100)}...`;
+        }
+        throw new Error(errorMessage);
+      }
+
+      toast.success('Room deleted successfully!');
+      await fetchMyRooms(); // Refresh the list of my rooms after deletion
+      // If the user was in the deleted room, they will be redirected by the App.tsx logic on disconnect
+    } catch (error: any) {
+      console.error('Error deleting room:', error);
+      toast.error(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)] bg-gray-900 text-white p-4">
@@ -157,12 +217,24 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({ onJoinRoom, userId }) => {
                   <p className="font-semibold text-lg">{room.roomName}</p>
                   <p className="text-sm text-gray-400">ID: {room.roomId}</p>
                 </span>
-                <button
-                  onClick={() => onJoinRoom(room.roomId)}
-                  className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-1 px-3 rounded transition-colors"
-                >
-                  Open
-                </button>
+                <div className="flex space-x-2"> {/* Container for buttons */}
+                  <button
+                    onClick={() => onJoinRoom(room.roomId)}
+                    className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-1 px-3 rounded transition-colors"
+                  >
+                    Open
+                  </button>
+                  {/* NEW: Delete Button - only show if current user is the creator */}
+                  {room.creatorFirebaseUid === userId && (
+                    <button
+                      onClick={() => handleDeleteRoom(room.roomId, room.roomName)}
+                      className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-1 px-3 rounded transition-colors"
+                      disabled={isLoading} // Disable delete during other operations
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
