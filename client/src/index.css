@@ -15,3 +15,49 @@ code {
     font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
         monospace;
 }
+
+/* Ensure CodeMirror base styles are visible if not already */
+.cm-editor {
+  height: 100%; /* Important for the editor to take up space */
+  /* Add any global editor font/line-height settings here if needed */
+}
+
+/* Base styles for remote cursor (the vertical line) */
+.cm-remote-cursor {
+  position: relative;
+  display: inline-block; /* Essential for it to appear in line with text */
+  pointer-events: none; /* Make it not interfere with clicks/selection */
+  vertical-align: top; /* Align with text baseline, adjust if needed */
+  animation: blink 1s infinite steps(1, start); /* Optional: make remote cursors blink */
+  opacity: 1; /* Default opacity */
+  transition: opacity 0.1s ease-in-out; /* Smooth transition for blinking */
+}
+
+/* Styles for the remote cursor label (the name tag) */
+.cm-remote-cursor-label {
+  position: absolute;
+  top: -1.5em; /* Adjust to position above the cursor line */
+  left: 0;
+  white-space: nowrap; /* Prevent name from wrapping */
+  padding: 2px 5px;
+  font-size: 0.7em;
+  line-height: 1; /* Compact line height for label */
+  border-radius: 3px;
+  z-index: 10; /* Ensure it's above other elements */
+  pointer-events: none; /* Make it not interfere with clicks */
+  transform: translateX(-50%); /* Center the label above the cursor */
+  opacity: 1; /* Default opacity */
+  transition: opacity 0.1s ease-in-out; /* Smooth transition */
+}
+
+/* Optional: Selection highlight for remote users */
+.cm-remote-selection {
+  /* Background color is set dynamically via JS */
+  pointer-events: none; /* Make it not interfere with clicks */
+}
+
+/* Optional: Blinking animation for cursors */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

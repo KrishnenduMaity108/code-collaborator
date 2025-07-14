@@ -128,10 +128,18 @@ export const setupSocketHandlers = (io: SocketIOServer) => {
       }
     });
 
-    // Add a simple test event (from initial setup)
-    socket.on('helloFromClient', (message: string) => {
-      console.log('Message from client:', message);
-      socket.emit('helloFromServer', `Server received: ${message}`);
+    socket.on('cursorActivity', ({ roomId, position, selectionStart, selectionEnd }: { roomId: string; position: number; selectionStart: number; selectionEnd: number }) => {
+      // Ensure the user is actually in a room before broadcasting their cursor
+      if (socket.data.roomId === roomId) {
+        // Broadcast cursor activity to all OTHER clients in the room
+        socket.to(roomId).emit('remoteCursorActivity', {
+          socketId: socket.id,
+          displayName: socket.data.displayName || 'Anonymous', // Include display name
+          position,
+          selectionStart,
+          selectionEnd
+        });
+      }
     });
 
   });

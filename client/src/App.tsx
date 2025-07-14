@@ -1,17 +1,17 @@
-// code-collaborator-ts-mongo/client/src/App.tsx
 import React, { useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import Auth from './components/Auth';
 import RoomLobby from './components/RoomLobby';
 import Header from './components/Header';
+import CodeEditor from './components/CodeEditor';
 
 import { useAuth } from './hooks/useAuth';
 import { useSocket } from './hooks/useSocket';
 import { useRoomManagement } from './hooks/useRoomManagement';
-import { type IActiveParticipant, type IFirebaseUser } from './types'; // Import IFirebaseUser
+import { type IActiveParticipant, type IFirebaseUser } from './types';
+import { type User as FirebaseSDKUser } from 'firebase/auth';
 
 function App() {
-  // 'user' here is now of type 'User | null' (Firebase SDK User)
   const { user, loading: authLoading, handleLogout } = useAuth();
   const { socket, activeParticipants } = useSocket();
   const {
@@ -23,17 +23,11 @@ function App() {
     setRoomData,
   } = useRoomManagement();
 
-  // Listen for room-specific events (e.g., roomJoined, loadCode) that need to update App state
   useEffect(() => {
     if (!socket) return;
 
     const onRoomJoined = (data: { roomId: string, roomName: string, creatorName: string }) => {
       console.log(`Socket.IO confirmed room joined: ${data.roomName}`);
-    };
-
-    const onLoadCode = (code: string, language: string) => {
-      console.log('App received initial code via loadCode:', code, language);
-      setRoomData(prev => prev ? { ...prev, currentCode: code, language: language } : null);
     };
 
     const onDisconnect = () => {
@@ -42,17 +36,14 @@ function App() {
     };
 
     socket.on('roomJoined', onRoomJoined);
-    socket.on('loadCode', onLoadCode);
     socket.on('disconnect', onDisconnect);
 
     return () => {
       socket.off('roomJoined', onRoomJoined);
-      socket.off('loadCode', onLoadCode);
       socket.off('disconnect', onDisconnect);
     };
   }, [socket, setCurrentRoomId, setRoomData]);
 
-  // Map the full Firebase SDK User to IFirebaseUser for the Header component's props
   const headerUser: IFirebaseUser | null = user ? {
     uid: user.uid,
     email: user.email,
@@ -68,49 +59,30 @@ function App() {
     );
   }
 
+  // Get current user's display name for passing to CodeEditor
+  const currentUserName = user?.displayName || user?.email || 'Anonymous'; // <--- Get current user's name
+
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      {/* Pass the mapped headerUser to the Header component */}
+    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
       <Header user={headerUser} onLogout={handleLogout} />
 
-      <main>
+      <main className="flex-grow flex flex-col">
         {!user ? (
           <Auth />
-        ) : currentRoomId && roomData ? (
+        ) : currentRoomId && roomData && socket ? (
           <>
-            {/* Placeholder for CodeEditor */}
-            <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)] p-4">
-              <h2 className="text-2xl font-semibold mb-4 text-white">
-                In Room: {roomData.roomName} (ID: {currentRoomId})
-              </h2>
-              <p className="text-gray-400 mb-6">
-                You are connected! Code editor will go here.
-                Initial Code: {roomData.currentCode.substring(0, 50)}...
-                Language: {roomData.language}
-              </p>
-              <div className="mb-4">
-                <h3 className="text-xl font-semibold mb-2">Active Participants:</h3>
-                {activeParticipants.length > 0 ? (
-                  <ul className="list-disc list-inside text-left">
-                    {activeParticipants.map((p: IActiveParticipant) => (
-                      <li key={p.socketId}>{p.displayName}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-gray-500">No other participants yet.</p>
-                )}
-              </div>
-              <button
-                onClick={() => socket && leaveRoom(socket)}
-                className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition-colors"
-              >
-                Leave Room
-              </button>
-            </div>
+            <CodeEditor
+              socket={socket}
+              roomId={currentRoomId}
+              initialCode={roomData.currentCode}
+              initialLanguage={roomData.language}
+              activeParticipants={activeParticipants}
+              onLeaveRoom={() => leaveRoom(socket)}
+              currentUserName={currentUserName} // <--- Pass it down
+            />
           </>
         ) : (
-          // No need for 'as FirebaseSDKUser' now, as 'user' is already the correct type
-          <RoomLobby onJoinRoom={(id: string) => user && socket && joinRoom(id, user, socket)} userId={user?.uid || ''} />
+          <RoomLobby onJoinRoom={(id: string) => user && socket && joinRoom(id, user as FirebaseSDKUser, socket)} userId={user?.uid || ''} />
         )}
       </main>
       <Toaster position="top-right" />
