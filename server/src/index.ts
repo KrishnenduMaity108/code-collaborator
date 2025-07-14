@@ -32,6 +32,8 @@ const io = new SocketIOServer(server, {
   }
 });
 
+app.set('io', io);
+
 app.use(cors({
   origin: process.env.CLIENT_URL || "http://localhost:5173"
 }));
