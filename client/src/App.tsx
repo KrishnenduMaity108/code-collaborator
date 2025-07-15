@@ -24,6 +24,18 @@ function App() {
   } = useRoomManagement();
 
   useEffect(() => {
+    // Only attempt to re-join if:
+    // 1. User is authenticated and not loading
+    // 2. Socket is connected
+    // 3. currentRoomId is set (from localStorage in useRoomManagement)
+    // 4. roomData is null (meaning we haven't fetched room details yet for this currentRoomId)
+    if (user && !authLoading && socket && currentRoomId && !roomData) {
+      console.log(`Attempting to re-join room ${currentRoomId} after reload.`);
+      joinRoom(currentRoomId, user as FirebaseSDKUser, socket);
+    }
+  }, [user, authLoading, socket, currentRoomId, roomData, joinRoom]);
+
+  useEffect(() => {
     if (!socket) return;
 
     const onRoomJoined = (data: { roomId: string, roomName: string, creatorName: string }) => {

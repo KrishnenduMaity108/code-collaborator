@@ -43,21 +43,21 @@ import {
 
 // --- Default Code Snippets ---
 const defaultCodeSnippets: { [key: string]: string } = {
-  javascript: `console.log("Hello, World!");`,
-  typescript: `console.log("Hello, TypeScript World!");`,
-  python: `print("Hello, World!")`,
-  java: `public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}`,
-  cpp: `#include <iostream>\n\nint main() {\n    std::cout << "Hello, World!" << std::endl;\n    return 0;\n}`,
-  c: `#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}`,
-  html: `<!DOCTYPE html>\n<html>\n<head>\n    <title>Hello HTML</title>\n</head>\n<body>\n    <h1>Hello, World!</h1>\n</body>\n</html>`,
-  css: `/* Hello, World! CSS */\nbody {\n    font-family: sans-serif;\n    color: #333;\n}`,
-  json: `{\n    "message": "Hello, World!"\n}`,
-  php: `<?php\n\necho "Hello, World!";\n\n?>`,
-  rust: `fn main() {\n    println!("Hello, World!");\n}`,
-  sql: `SELECT 'Hello, World!';`,
-  go: `package main\n\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Hello, World!")\n}`,
-  markdown: `# Hello, World!\n\nThis is a *Markdown* example.\n\n- Item 1\n- Item 2`,
-  text: `Hello, World! (Plain Text)`
+  javascript: `console.log("Hello, World!");\n\n\n\n`,
+  typescript: `console.log("Hello, TypeScript World!");\n\n\n\n`,
+  python: `print("Hello, World!")\n\n\n\n`,
+  java: `public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}\n\n\n\n`,
+  cpp: `#include <iostream>\n\nint main() {\n    std::cout << "Hello, World!" << std::endl;\n    return 0;\n}\n\n\n\n`,
+  c: `#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}\n\n\n\n`,
+  html: `<!DOCTYPE html>\n<html>\n<head>\n    <title>Hello HTML</title>\n</head>\n<body>\n    <h1>Hello, World!</h1>\n</body>\n</html>\n\n\n\n`,
+  css: `/* Hello, World! CSS */\nbody {\n    font-family: sans-serif;\n    color: #333;\n}\n\n\n\n`,
+  json: `{\n    "message": "Hello, World!"\n}\n\n\n\n`,
+  php: `<?php\n\necho "Hello, World!";\n\n?>\n\n\n\n`,
+  rust: `fn main() {\n    println!("Hello, World!");\n}\n\n\n\n`,
+  sql: `SELECT 'Hello, World!';\n\n\n\n`,
+  go: `package main\n\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Hello, World!")\n}\n\n\n\n`,
+  markdown: `# Hello, World!\n\nThis is a *Markdown* example.\n\n- Item 1\n- Item 2\n\n\n\n`,
+  text: `Hello, World! (Plain Text)\n\n\n\n`
 };
 
 // Map language strings to CodeMirror extensions

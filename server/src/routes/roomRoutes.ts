@@ -47,7 +47,7 @@ router.post('/create', authMiddleware, async (req: AuthenticatedRequest, res: Re
       creatorId: mongoUser._id,
       creatorFirebaseUid: firebaseUser.uid,
       language: language || 'javascript',
-      currentCode: '// Start coding in ' + (language || 'javascript') + '...',
+      currentCode: `// Start your coding... press Enter\n\nconsole.log("Hello, World!");\n\n\n\n\n`,
       participants: [],
     })
 

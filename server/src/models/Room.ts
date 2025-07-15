@@ -43,7 +43,7 @@ const RoomSchema: Schema = new Schema<IRoom>({
   },
   currentCode: {
     type: String,
-    default: '// Start coding here...',
+    default: `console.log("Hello, World!");`,
   },
   language: {
     type: String,

@@ -1,5 +1,5 @@
 // code-collaborator-ts-mongo/client/src/hooks/useRoomManagement.ts
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { type IRoom } from '../types';
 import { Socket } from 'socket.io-client';
@@ -20,6 +20,15 @@ interface UseRoomManagementResult {
 export const useRoomManagement = (): UseRoomManagementResult => {
     const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
     const [roomData, setRoomData] = useState<IRoom | null>(null);
+
+    useEffect(() => {
+        const storedRoomId = localStorage.getItem('lastVisitedRoomId');
+        if (storedRoomId) {
+            // Do NOT join here directly, as socket/user might not be ready.
+            // Just set the currentRoomId, and let App.tsx's useEffect trigger join.
+            setCurrentRoomId(storedRoomId);
+        }
+    }, []); // Run only once on mount
 
     const fetchRoomDetails = useCallback(async (roomId: string) => {
         try {
@@ -58,6 +67,7 @@ export const useRoomManagement = (): UseRoomManagementResult => {
             if (fetchedRoomData) {
                 setRoomData(fetchedRoomData);
                 setCurrentRoomId(roomId);
+                localStorage.setItem('lastVisitedRoomId', roomId);
 
                 socket.connect();
                 socket.emit('joinRoom', { roomId, idToken: await user.getIdToken() }); // Ensure idToken is passed
@@ -79,6 +89,7 @@ export const useRoomManagement = (): UseRoomManagementResult => {
             socket.disconnect(); // Disconnects from all Socket.IO rooms
             setCurrentRoomId(null);
             setRoomData(null);
+            localStorage.removeItem('lastVisitedRoomId'); // Clear the ID
             toast('You left the room.');
         }
     }, [currentRoomId]);
