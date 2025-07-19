@@ -15,6 +15,7 @@ import { authMiddleware } from './middleware/authMiddleware'; // Keep if you hav
 // Import routes
 import authRoutes from './routes/authRoutes';
 import roomRoutes from './routes/roomRoutes';
+import codeRoutes from './routes/codeRoutes';
 
 // Import socket handlers
 import { setupSocketHandlers } from './socket/socketHandler';
@@ -45,6 +46,7 @@ connectDB();
 // --- Register Express Routes ---
 app.use('/api/auth', authRoutes);
 app.use('/api/rooms', roomRoutes);
+app.use('/api/code', codeRoutes);
 
 // Basic Express route (can keep for health check)
 app.get('/', (req, res) => {

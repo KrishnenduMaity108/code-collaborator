@@ -1,3 +1,4 @@
+// client/src/hooks/useCollaborativeCodeMirror.ts
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Socket } from 'socket.io-client';
 
@@ -39,7 +40,7 @@ import {
   updateRemoteCursorsEffect,
   type RemoteCursorData,
   resetCursorColorMap
-} from '../codemirror/remoteCursorsExtension';
+} from '../codemirror/remoteCursorsExtension'; // Ensure this path is correct
 
 // --- Default Code Snippets ---
 const defaultCodeSnippets: { [key: string]: string } = {
@@ -74,7 +75,7 @@ const languageExtensions: { [key: string]: any } = {
   php: php(),
   rust: rust(),
   sql: sql(),
-  go: StreamLanguage.define(go), // Example for legacy mode
+  go: StreamLanguage.define(go),
   markdown: markdown(),
   text: [], // No specific language highlighting for plain text
 };
@@ -82,8 +83,9 @@ const languageExtensions: { [key: string]: any } = {
 interface UseCodeMirrorResult {
   currentLanguage: string;
   handleLocalLanguageChange: (newLanguage: string) => void;
-  isCursorActivityEnabled: boolean; // <--- NEW
-  toggleCursorActivity: () => void; // <--- NEW
+  isCursorActivityEnabled: boolean;
+  toggleCursorActivity: () => void;
+  getCurrentCode: () => string;
 }
 
 export const useCollaborativeCodeMirror = (
@@ -96,8 +98,12 @@ export const useCollaborativeCodeMirror = (
 ): UseCodeMirrorResult => {
   const viewRef = useRef<EditorView | null>(null);
   const languageCompartmentRef = useRef(new Compartment());
+  // NOTE: cursorActivityCompartmentRef is no longer strictly needed for controlling emission,
+  // but we can keep it for consistency or if we want to re-introduce features later.
+  const cursorActivityCompartmentRef = useRef(new Compartment());
   const [currentLanguage, setCurrentLanguage] = useState(initialLanguage);
-  const [isCursorActivityEnabled, setIsCursorActivityEnabled] = useState(true); // <--- NEW STATE
+  // isCursorActivityEnabled now only controls local rendering, not sending
+  const [isCursorActivityEnabled, setIsCursorActivityEnabled] = useState(true);
 
   const cursorActivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -106,16 +112,54 @@ export const useCollaborativeCodeMirror = (
     [socketId: string]: RemoteCursorData;
   }>({});
 
-  // Effect for initializing/destroying the CodeMirror editor
+  // Memoize the update listener that **always emits** cursor positions.
+  // The `enabled` parameter is now effectively unused within this function.
+  // We keep the `enabled` parameter in the signature for consistency
+  // with how it was previously used with the compartment, but its internal
+  // check is removed.
+  const createUpdateListener = useCallback(() => { // Removed 'enabled: boolean' parameter
+    return EditorView.updateListener.of((update: ViewUpdate) => {
+      // Always emit code changes
+      if (update.docChanged && socket && roomId) {
+        socket.emit('codeChange', { roomId, newCode: update.state.doc.toString() });
+      }
+
+      // Always emit cursor activity if there's a selection change
+      // This is the core change: NO LONGER CONDITIONAL ON `enabled`
+      if (update.selectionSet && socket && roomId) {
+        const selection = update.state.selection.main;
+        const head = selection.head;
+        const anchor = selection.anchor;
+
+        if (cursorActivityTimeoutRef.current) {
+          clearTimeout(cursorActivityTimeoutRef.current);
+        }
+        cursorActivityTimeoutRef.current = setTimeout(() => {
+          socket.emit('cursorActivity', {
+            roomId,
+            position: head,
+            selectionStart: Math.min(head, anchor),
+            selectionEnd: Math.max(head, anchor),
+            displayName: displayName
+          });
+          cursorActivityTimeoutRef.current = null;
+        }, 100);
+      }
+    });
+  }, [socket, roomId, displayName]); // Dependencies are still important for `useCallback`
+
+  // --- EFFECT 1: Editor Initialization ---
   useEffect(() => {
-    if (!editorParentRef.current || !socket) return;
+    if (!editorParentRef.current || !socket) {
+      return;
+    }
 
     if (viewRef.current) {
       viewRef.current.destroy();
       viewRef.current = null;
     }
 
-    resetCursorColorMap(); // Reset colors when editor initializes or re-initializes
+    resetCursorColorMap();
 
     const initialLangExtension = languageExtensions[initialLanguage] || javascript();
 
@@ -136,37 +180,10 @@ export const useCollaborativeCodeMirror = (
         collab({
           startVersion: 0,
         }),
-        oneDark, // Apply the CodeMirror Theme here!
-        remoteCursorsField, // Add the remote cursors StateField extension
-        // Event listener for local changes
-        EditorView.updateListener.of((update: ViewUpdate) => {
-          if (update.docChanged && socket && roomId) {
-            socket.emit('codeChange', { roomId, newCode: update.state.doc.toString() });
-          }
-
-          // --- Cursor Activity Tracking (Client Emits 'cursorActivity') ---
-          // Only emit if cursor activity is enabled
-          if (isCursorActivityEnabled && update.selectionSet && socket && roomId) { // <--- CONDITIONAL EMISSION
-            const selection = update.state.selection.main;
-            const head = selection.head;
-            const anchor = selection.anchor;
-
-            if (cursorActivityTimeoutRef.current) {
-              clearTimeout(cursorActivityTimeoutRef.current);
-            }
-
-            cursorActivityTimeoutRef.current = setTimeout(() => {
-              socket.emit('cursorActivity', {
-                roomId,
-                position: head,
-                selectionStart: Math.min(head, anchor),
-                selectionEnd: Math.max(head, anchor),
-                displayName: displayName
-              });
-              cursorActivityTimeoutRef.current = null;
-            }, 1000);
-          }
-        }),
+        oneDark,
+        remoteCursorsField,
+        // The update listener is now always added without conditional 'enabled'
+        cursorActivityCompartmentRef.current.of(createUpdateListener()),
       ],
     });
 
@@ -186,25 +203,53 @@ export const useCollaborativeCodeMirror = (
       if (cursorActivityTimeoutRef.current) {
         clearTimeout(cursorActivityTimeoutRef.current);
       }
-      resetCursorColorMap(); // Reset colors when component unmounts
+      resetCursorColorMap();
     };
-  }, [roomId, socket, editorParentRef, displayName, initialCode, initialLanguage, isCursorActivityEnabled]); // <--- Add isCursorActivityEnabled to deps
+  }, [roomId, socket, editorParentRef, displayName, initialCode, initialLanguage, createUpdateListener]);
 
-  // Effect to dispatch updates to the CodeMirror StateField whenever remoteCursorData changes
+  // --- EFFECT 2: (No longer needed for reconfiguring emission) ---
+  // This effect can now be removed, as the emission logic is no longer
+  // controlled by `isCursorActivityEnabled`. The `createUpdateListener`
+  // doesn't depend on `isCursorActivityEnabled` anymore.
+  // Keeping it here commented out for clarity of removal.
+  /*
+  useEffect(() => {
+      if (viewRef.current) {
+          // This compartment and its reconfigure are no longer necessary
+          // since createUpdateListener no longer takes an 'enabled' parameter.
+          // The emission of cursor events is now unconditional.
+          // viewRef.current.dispatch({
+          //     effects: cursorActivityCompartmentRef.current.reconfigure(
+          //         createUpdateListener()
+          //     )
+          // });
+      }
+  }, [isCursorActivityEnabled, createUpdateListener]);
+  */
+
+  // --- EFFECT 3: Update Remote Cursors on Screen ---
+  // This effect runs when remoteCursorData changes OR when `isCursorActivityEnabled` changes.
+  // It filters/clears the displayed cursors based on local `isCursorActivityEnabled` state.
   useEffect(() => {
     if (!viewRef.current || !socket) return;
 
-    // Filter out the local user's own cursor from the list of remote cursors to display
-    const cursorsToDisplay = Object.values(remoteCursorData)
-      .filter(data => data.socketId !== socket.id);
+    let cursorsToDisplay: RemoteCursorData[] = [];
 
-    // Dispatch an effect to update the remoteCursorsField with the new data
+    // If *this client's* cursor activity is enabled, then we display others' cursors.
+    // Otherwise, we display an empty array, effectively clearing all remote cursors on this screen.
+    if (isCursorActivityEnabled) {
+      cursorsToDisplay = Object.values(remoteCursorData)
+        .filter(data => data.socketId !== socket.id); // Filter out own cursor
+    } else {
+      cursorsToDisplay = []; // If local cursor activity is off, clear all remote cursors from view
+    }
+
     viewRef.current.dispatch({
       effects: updateRemoteCursorsEffect.of(cursorsToDisplay)
     } as TransactionSpec);
-  }, [remoteCursorData, socket]);
+  }, [remoteCursorData, socket, isCursorActivityEnabled]); // Crucially depends on isCursorActivityEnabled
 
-  // Effect for handling incoming code/language updates from other clients via socket
+  // --- EFFECT 4: Handle Incoming Socket Events ---
   useEffect(() => {
     if (!socket || !viewRef.current) return;
 
@@ -242,15 +287,15 @@ export const useCollaborativeCodeMirror = (
       }
     };
 
-    // --- Handle Incoming Remote Cursor Activity ---
     const handleRemoteCursorActivity = (data: RemoteCursorData) => {
+      // This listener always updates remoteCursorData state.
+      // The decision to *render* these cursors is made in EFFECT 3 based on `isCursorActivityEnabled`.
       setRemoteCursorData(prev => ({
         ...prev,
         [data.socketId]: data,
       }));
     };
 
-    // --- Handle Participant Left (Cleanup Cursors) ---
     const handleParticipantLeft = (data: { socketId: string; displayName: string }) => {
       setRemoteCursorData(prev => {
         const newState = { ...prev };
@@ -276,6 +321,7 @@ export const useCollaborativeCodeMirror = (
     };
   }, [socket, currentLanguage]);
 
+  // Handles local language change and emits to others
   const handleLocalLanguageChange = useCallback((newLanguage: string) => {
     if (!socket || !roomId || !viewRef.current) return;
 
@@ -283,16 +329,20 @@ export const useCollaborativeCodeMirror = (
     let codeToApply = currentEditorContent;
     let shouldUpdateCode = false;
 
+    // If current content is empty, apply default snippet
     if (currentEditorContent.trim() === '') {
       codeToApply = defaultCodeSnippets[newLanguage] || '';
       shouldUpdateCode = true;
     } else {
-      if (window.confirm(
+      // Only prompt if a change is suggested and current content is not empty
+      if (defaultCodeSnippets[newLanguage] && window.confirm(
         `Do you want to replace the current code with "Hello World" for ${newLanguage}? ` +
         `Click OK to replace, Cancel to just change syntax highlighting.`
       )) {
-        codeToApply = defaultCodeSnippets[newLanguage] || currentEditorContent;
+        codeToApply = defaultCodeSnippets[newLanguage]; // Use default if confirmed
         shouldUpdateCode = true;
+      } else {
+        codeToApply = currentEditorContent; // Keep current code
       }
     }
 
@@ -303,6 +353,7 @@ export const useCollaborativeCodeMirror = (
       socket.emit('codeChange', { roomId, newCode: codeToApply });
     }
 
+    // Always reconfigure language extension regardless of code change
     viewRef.current.dispatch({
       effects: languageCompartmentRef.current.reconfigure(languageExtensions[newLanguage] || javascript())
     });
@@ -311,18 +362,26 @@ export const useCollaborativeCodeMirror = (
     socket.emit('languageChange', { roomId, newLanguage });
   }, [socket, roomId]);
 
-  // --- NEW: Toggle Cursor Activity Function ---
+  // Toggles the local `isCursorActivityEnabled` state.
+  // This state now ONLY affects the local rendering of remote cursors (via EFFECT 3).
+  // It NO LONGER affects the emission of your own cursor data.
   const toggleCursorActivity = useCallback(() => {
     setIsCursorActivityEnabled(prev => !prev);
-    // Optional: If disabling, you might want to send a "clear my cursor" signal
-    // to the server to immediately remove your cursor from other clients.
-    // socket.emit('clearMyCursor', { roomId });
+  }, []);
+
+  // Returns the current code from the CodeMirror editor
+  const getCurrentCode = useCallback(() => {
+    if (viewRef.current) {
+      return viewRef.current.state.doc.toString();
+    }
+    return '';
   }, []);
 
   return {
     currentLanguage,
     handleLocalLanguageChange,
-    isCursorActivityEnabled, 
+    isCursorActivityEnabled,
     toggleCursorActivity,
+    getCurrentCode,
   };
 };

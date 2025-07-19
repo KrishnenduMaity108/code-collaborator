@@ -1,7 +1,10 @@
-import React, { useRef } from 'react';
+// client/src/components/CodeEditor.tsx
+import React, { useRef, useState, useCallback } from 'react'; // Added useCallback
 import { Socket } from 'socket.io-client';
 import { useCollaborativeCodeMirror } from '../hooks/useCollaborativeCodeMirror';
 import { type IActiveParticipant } from '../types';
+import OutputConsole from './OutputConsole'; // Import the new component
+import { auth } from '../firebase'; // Import auth here, as it's needed for getIdToken for execution
 
 const languageOptions = [
   'javascript', 'typescript', 'html', 'css', 'json', 'python', 'java',
@@ -18,6 +21,8 @@ interface CodeEditorProps {
   currentUserName: string;
 }
 
+const API_BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+
 const CodeEditor: React.FC<CodeEditorProps> = ({
   socket,
   roomId,
@@ -28,12 +33,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   currentUserName
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
+  const [executionOutput, setExecutionOutput] = useState<string>('');
+  const [isExecuting, setIsExecuting] = useState<boolean>(false);
 
   const {
     currentLanguage,
     handleLocalLanguageChange,
-    isCursorActivityEnabled, // <--- NEW
-    toggleCursorActivity // <--- NEW
+    isCursorActivityEnabled,
+    toggleCursorActivity,
+    getCurrentCode,
   } = useCollaborativeCodeMirror(
     editorRef,
     socket,
@@ -47,12 +55,62 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     handleLocalLanguageChange(event.target.value);
   };
 
+  // Refactored: handleRunCode now lives here, directly using getCurrentCode from the hook
+  const handleRunCode = useCallback(async () => {
+    if (!socket) {
+      setExecutionOutput('Error: Socket not connected.');
+      return;
+    }
+
+    const code = getCurrentCode();
+    if (!code.trim()) {
+      setExecutionOutput('Please write some code to execute.');
+      return;
+    }
+
+    setIsExecuting(true);
+    setExecutionOutput(''); // Clear previous output immediately before showing 'Executing...' in console
+
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('User not authenticated. Please log in again.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/code/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          code,
+          language: currentLanguage,
+          roomId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Code execution failed on server.');
+      }
+
+      const data = await response.json();
+      setExecutionOutput(data.output || 'No output.');
+    } catch (error: any) {
+      console.error('Code execution error:', error);
+      setExecutionOutput(`Execution Error: ${error.message || 'An unknown error occurred.'}`);
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [socket, currentLanguage, getCurrentCode, roomId]); // Add dependencies
+
   return (
     <div className="flex flex-col h-full bg-gray-900 text-white p-4">
-      {/* Top Bar: Room ID, Language Selector, and NEW Cursor Activity Toggle */}
+      {/* Top Bar: Room ID, Language Selector, Cursor Activity Toggle, and Run Button */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold text-cyan-400">Room: {roomId}</h2>
-        <div className="flex items-center space-x-4"> {/* Adjusted spacing for new button */}
+        <div className="flex items-center space-x-4">
           <label htmlFor="language-select" className="text-gray-300">Language:</label>
           <select
             id="language-select"
@@ -64,21 +122,30 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
               <option key={lang} value={lang}>{lang.charAt(0).toUpperCase() + lang.slice(1)}</option>
             ))}
           </select>
-          {/* NEW Button for Cursor Activity */}
           <button
             onClick={toggleCursorActivity}
             className={`py-2 px-4 rounded transition-colors ${isCursorActivityEnabled
-                ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
-                : 'bg-green-600 hover:bg-green-700 text-white'
+              ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+              : 'bg-green-600 hover:bg-green-700 text-white'
               }`}
           >
             {isCursorActivityEnabled ? 'Stop Cursor Activity' : 'Start Cursor Activity'}
+          </button>
+          <button
+            onClick={handleRunCode}
+            disabled={isExecuting}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isExecuting ? 'Running...' : 'Run Code'}
           </button>
         </div>
       </div>
 
       <div ref={editorRef} className="flex-grow border border-gray-700 rounded overflow-hidden mb-4">
       </div>
+
+      {/* Render the new OutputConsole component */}
+      <OutputConsole output={executionOutput} isLoading={isExecuting} />
 
       <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg shadow-md">
         <div className="text-gray-300 text-sm">
