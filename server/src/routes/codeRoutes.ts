@@ -3,9 +3,9 @@ import { Router, Request, Response } from "express";
 import { authMiddleware } from "../middleware/authMiddleware";
 import { execa } from 'execa'; // For running external commands (Docker)
 import * as admin from 'firebase-admin'; // For Firebase user authentication
-import path from 'path';        // For handling file paths
-import fs from 'fs/promises';   // For asynchronous file system operations
-import os from 'os';            // For getting the temporary directory
+import path from 'path';      // For handling file paths
+import fs from 'fs/promises';  // For asynchronous file system operations
+import os from 'os';          // For getting the temporary directory
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 const router = Router();
@@ -131,6 +131,7 @@ router.post('/run', authMiddleware, async (req: AuthenticatedRequest, res: Respo
 
     const dockerArgs = [
       'run',
+      '-i', //  THIS LINE to enable interactive mode for stdin
       '--rm',  // Automatically remove the container when it exits
       '--name', `code-run-${fileUUID}`, // Unique name for the container
       '--network', 'none', // CRITICAL: Isolate from network
@@ -143,11 +144,12 @@ router.post('/run', authMiddleware, async (req: AuthenticatedRequest, res: Respo
     ];
 
     console.log(`Executing: docker ${dockerArgs.join(' ')}`);
+    console.log(input);
 
     // 4. Execute Docker Command using `execa`
     const childProcess = execa('docker', dockerArgs, {
       input: input || '',     // Pass stdin if provided by the user
-      timeout: 15000,  // Timeout for the entire Docker command (5 seconds)
+      timeout: 6000,  // Timeout for the entire Docker command (5 seconds)
       killSignal: 'SIGKILL',  // Force kill if timeout occurs
       cwd: hostTempDir,  // Set working directory for execa to access temp files
       stripFinalNewline: false,   // Preserve newlines in output

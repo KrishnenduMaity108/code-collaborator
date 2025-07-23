@@ -35,6 +35,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const editorRef = useRef<HTMLDivElement>(null);
   const [executionOutput, setExecutionOutput] = useState<string>('');
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
+  const [userInput, setUserInput] = useState<string>('');
 
   const {
     currentLanguage,
@@ -87,6 +88,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           code,
           language: currentLanguage,
           roomId,
+          input: userInput
         }),
       });
 
@@ -103,7 +105,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     } finally {
       setIsExecuting(false);
     }
-  }, [socket, currentLanguage, getCurrentCode, roomId]); // Add dependencies
+  }, [socket, currentLanguage, getCurrentCode, roomId, userInput]); // Add dependencies
 
   return (
     <div className="flex flex-col h-full bg-gray-900 text-white p-4">
@@ -142,6 +144,20 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       </div>
 
       <div ref={editorRef} className="flex-grow border border-gray-700 rounded overflow-hidden mb-4">
+      </div>
+
+      {/* input Eliment */}
+      <div className="mb-4">
+        <label htmlFor="user-input" className="block text-sm font-medium text-gray-300 mb-2">
+          User Input (stdin):
+        </label>
+        <textarea
+          id='user-input'
+          value={userInput}
+          onChange={(e) => setUserInput(e.target.value)}
+          placeholder="Enter input for your code here..."
+          className="w-full h-24 p-2 bg-gray-800 border border-gray-700 rounded text-white font-mono"
+        />
       </div>
 
       {/* Render the new OutputConsole component */}
