@@ -96,11 +96,13 @@ VITE_FIREBASE_APP_ID="..."
 
 Server: -
 cd server
+
 npm install
 
 
 Client: -
 cd ../client
+
 npm install
 
 #### 4. Build Docker Images (for code execution)
@@ -125,12 +127,14 @@ Start the server and client in separate terminals.
 Start the Server
 
 cd server
+
 npm run dev
 
 
 Start the Client
 
 cd client
+
 npm run dev
 
 
